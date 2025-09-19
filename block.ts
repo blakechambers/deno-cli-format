@@ -1,4 +1,63 @@
 import { wrapText } from "./util.ts";
+
+function extractPaddingOptions(options: BlockOptions): BlockPaddingOptions {
+  const padding: BlockPaddingOptions = {};
+
+  if (options.paddingLeft !== undefined) {
+    padding.left = options.paddingLeft;
+  }
+
+  if (options.paddingRight !== undefined) {
+    padding.right = options.paddingRight;
+  }
+
+  if (options.paddingTop !== undefined) {
+    padding.top = options.paddingTop;
+  }
+
+  if (options.paddingBottom !== undefined) {
+    padding.bottom = options.paddingBottom;
+  }
+
+  return padding;
+}
+
+interface BlockPaddingOptions {
+  left?: number;
+  right?: number;
+  top?: number;
+  bottom?: number;
+}
+
+interface BlockSizeOptions {
+  width?: number;
+  height?: number;
+}
+
+class BlockPadding {
+  public left: number;
+  public right: number;
+  public top: number;
+  public bottom: number;
+
+  constructor(options: BlockPaddingOptions = {}) {
+    this.left = options.left || 0;
+    this.right = options.right || 0;
+    this.top = options.top || 0;
+    this.bottom = options.bottom || 0;
+  }
+}
+
+class BlockSize {
+  public width: number;
+  public height: number;
+
+  constructor(options: BlockSizeOptions = {}) {
+    this.width = options.width || 0;
+    this.height = options.height || 0;
+  }
+}
+
 interface BlockOptions {
   width?: number;
   height?: number;
@@ -20,59 +79,57 @@ type TextAlignStrings = keyof typeof TextAlign;
 
 class Block {
   public content: string;
-  public width?: number;
-  public height?: number;
-  public paddingLeft: number;
-  public paddingRight: number;
-  public paddingTop: number;
-  public paddingBottom: number;
+  public padding: BlockPadding;
+  public size : BlockSize;
   public textAlign: TextAlignStrings;
 
   constructor(content: string, options: BlockOptions = {}) {
     this.content = content;
-    this.width = options.width;
-    this.height = options.height;
-    this.paddingLeft = options.paddingLeft || 0;
-    this.paddingRight = options.paddingRight || 0;
-    this.paddingTop = options.paddingTop || 0;
-    this.paddingBottom = options.paddingBottom || 0;
-    this.textAlign = options.textAlign || "left";
+    this.padding = new BlockPadding(extractPaddingOptions(options));
+    this.size = new BlockSize(options);
+    this.textAlign = options.textAlign || TextAlign.left;
   }
 
-  render(width: number, height?: number): Array<string> {
-    width = this.width || width;
+  render(width: number, height?: number, truncate = true): Array<string> {
+    width = this.size.width || width;
 
-    const eligibleContentWidth = width - this.paddingLeft - this.paddingRight;
+    const eligibleContentWidth = width - this.padding.left - this.padding.right;
 
     // subtract padding from width to determine the max width of the content
     const blockWidth = eligibleContentWidth;
 
     const wrappedContentLines: string[] = this.renderBlockContent(
       blockWidth,
-      undefined,
+      height,
     );
 
-    const paddedContentLines = this.padLines(wrappedContentLines);
+    let paddedContentLines = this.padLines(wrappedContentLines);
 
-    if (this.height && paddedContentLines.length > this.height) {
-      throw new Error("Content height is greater than block height");
+    if (height && paddedContentLines.length > height) {
+      if (truncate) {
+        paddedContentLines = paddedContentLines.slice(0, height);
+      } else {
+        throw new Error("Content height is greater than block height");
+      }
     }
 
     return paddedContentLines;
   }
 
   padLines(lines: string[]): string[] {
-    // get line length from first line
-    const lineLength = lines[0].length;
+    const lineLength = lines.reduce(
+      (max, line) => Math.max(max, line.length),
+      0,
+    );
 
     const verticallyPaddedContentLines = [
-      ...Array(this.paddingTop).fill("".padEnd(lineLength)),
+      ...Array(this.padding.top).fill("".padEnd(lineLength)),
       ...lines,
-      ...Array(this.paddingBottom).fill("".padEnd(lineLength)),
+      ...Array(this.padding.bottom).fill("".padEnd(lineLength)),
     ];
 
-    const leftPadding = "".padStart(this.paddingLeft);
-    const rightPadding = "".padStart(this.paddingRight);
+    const leftPadding = "".padStart(this.padding.left);
+    const rightPadding = "".padStart(this.padding.right);
 
     const horizontallyPaddedContentLines: string[] =
       verticallyPaddedContentLines.map(
